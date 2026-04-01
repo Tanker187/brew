@@ -1,3 +1,5 @@
+[![Copilot Setup Steps](https://github.com/Tanker187/brew/actions/workflows/copilot-setup-steps.yml/badge.svg)](https://github.com/Tanker187/brew/actions/workflows/copilot-setup-steps.yml)
+
 # Homebrew
 
 [![GitHub release](https://img.shields.io/github/release/Homebrew/brew.svg)](https://github.com/Homebrew/brew/releases)
