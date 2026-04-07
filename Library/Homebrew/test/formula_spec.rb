@@ -641,15 +641,15 @@ RSpec.describe Formula do
       expect(f).not_to be_latest_version_installed
     end
 
-    it "returns false if the #latest_installed_prefix does not have children" do
+    it "returns false if the #latest_installed_prefix is empty" do
       allow(f).to receive(:latest_installed_prefix)
-        .and_return(instance_double(Pathname, directory?: true, children: []))
+        .and_return(instance_double(Pathname, directory?: true, empty?: true))
       expect(f).not_to be_latest_version_installed
     end
 
-    it "returns true if the #latest_installed_prefix has children" do
+    it "returns true if the #latest_installed_prefix is not empty" do
       allow(f).to receive(:latest_installed_prefix)
-        .and_return(instance_double(Pathname, directory?: true, children: [double]))
+        .and_return(instance_double(Pathname, directory?: true, empty?: false))
       expect(f).to be_latest_version_installed
     end
   end
@@ -2500,6 +2500,20 @@ RSpec.describe Formula do
 
       expect { described_class.all(eval_all: true) }.not_to raise_error
       expect(described_class.all(eval_all: true)).to eq([])
+    end
+  end
+
+  describe "#std_pip_args" do
+    let(:f) do
+      formula do
+        url "foo-1.0"
+      end
+    end
+
+    it "filters packages uploaded within the last day" do
+      allow(Time).to receive(:now).and_return(Time.utc(2026, 4, 4, 12, 0, 0))
+
+      expect(f.std_pip_args).to include("--uploaded-prior-to=2026-04-03T12:00:00Z")
     end
   end
 end

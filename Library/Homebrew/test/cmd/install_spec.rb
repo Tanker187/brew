@@ -9,6 +9,39 @@ RSpec.describe Homebrew::Cmd::InstallCmd do
 
   it_behaves_like "parseable arguments"
 
+  it "installs an explicitly requested tap before resolving a formula" do
+    cmd = described_class.new(["user/repo/foo"])
+    tap = Tap.fetch("user", "repo")
+
+    allow(Tap).to receive(:with_formula_name).with("user/repo/foo").and_return([tap, "foo"])
+    expect(tap).to receive(:ensure_installed!).ordered
+    expect(cmd.args.named).to receive(:to_formulae_and_casks).with(warn: false).ordered
+                                                             .and_raise(TapFormulaUnavailableError.new(tap, "foo"))
+
+    expect { cmd.run }.to output(/If you trust this tap/).to_stderr
+
+    expect(Homebrew).to have_failed
+  end
+
+  it "does not install `homebrew/cask` when a cask remains unavailable" do
+    cmd = described_class.new(["foo"])
+    cask_tap = CoreCaskTap.instance
+
+    require "search"
+
+    allow(Tap).to receive_messages(with_formula_name: nil, with_cask_token: nil, untapped_official_taps: [])
+    allow(cmd.args.named).to receive(:to_formulae_and_casks).with(warn: false)
+                                                            .and_raise(FormulaOrCaskUnavailableError.new("foo"))
+    allow(cask_tap).to receive(:installed?).and_return(false)
+    allow(Homebrew::Search).to receive(:search_names).and_return([[], []])
+
+    expect(cask_tap).not_to receive(:ensure_installed!)
+
+    expect { cmd.run }.to raise_error(SystemExit)
+
+    expect(Homebrew).to have_failed
+  end
+
   context "when using a bottle" do
     let(:formula_name) { "testball_bottle" }
     let(:formula_prefix) { HOMEBREW_CELLAR/formula_name/"0.1" }

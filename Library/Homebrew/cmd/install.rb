@@ -205,20 +205,10 @@ module Homebrew
           EOS
         end
 
-        begin
-          formulae, casks = T.cast(
-            args.named.to_formulae_and_casks(warn: false).partition { it.is_a?(Formula) },
-            [T::Array[Formula], T::Array[Cask::Cask]],
-          )
-        rescue FormulaOrCaskUnavailableError, Cask::CaskUnavailableError
-          cask_tap = CoreCaskTap.instance
-          if !cask_tap.installed? && (args.cask? || Tap.untapped_official_taps.exclude?(cask_tap.name))
-            cask_tap.ensure_installed!
-            retry if cask_tap.installed?
-          end
-
-          raise
-        end
+        formulae, casks = T.cast(
+          args.named.to_formulae_and_casks(warn: false).partition { it.is_a?(Formula) },
+          [T::Array[Formula], T::Array[Cask::Cask]],
+        )
 
         installed_casks = T.let([], T::Array[Cask::Cask])
         new_casks = T.let([], T::Array[Cask::Cask])
