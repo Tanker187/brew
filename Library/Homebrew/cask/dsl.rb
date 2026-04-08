@@ -3,7 +3,6 @@
 
 require "autobump_constants"
 require "locale"
-require "lazy_object"
 require "livecheck"
 require "utils/output"
 
@@ -614,11 +613,6 @@ module Cask
     # Is the cask in autobump list?
     def autobump?
       @autobump == true
-    end
-
-    # Is no_autobump! method defined?
-    def no_autobump_defined?
-      @no_autobump_defined == true
     end
 
     # Declare that a cask is no longer functional or supported.

@@ -10,7 +10,6 @@ require "utils/output"
 require "utils/path"
 require "service"
 require "utils/curl"
-require "deprecate_disable"
 require "extend/hash/deep_transform_values"
 require "extend/hash/keys"
 require "tap"
@@ -1086,31 +1085,6 @@ module Formulary
   )
     FormulaContentsLoader.new(name, path, contents, tap:)
                          .get_formula(spec, alias_path:, force_bottle:, flags:, ignore_errors:)
-  end
-
-  # Return a {Formula} instance directly from JSON contents.
-  sig {
-    params(
-      name:          String,
-      contents:      T::Hash[String, T.untyped],
-      spec:          Symbol,
-      alias_path:    T.nilable(Pathname),
-      force_bottle:  T::Boolean,
-      flags:         T::Array[String],
-      ignore_errors: T::Boolean,
-    ).returns(Formula)
-  }
-  def self.from_json_contents(
-    name,
-    contents,
-    spec = :stable,
-    alias_path: nil,
-    force_bottle: false,
-    flags: [],
-    ignore_errors: false
-  )
-    FormulaJSONContentsLoader.new(name, contents)
-                             .get_formula(spec, alias_path:, force_bottle:, flags:, ignore_errors:)
   end
 
   sig { params(ref: String).returns(Pathname) }

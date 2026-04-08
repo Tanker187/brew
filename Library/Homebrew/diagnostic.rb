@@ -2,16 +2,15 @@
 # frozen_string_literal: true
 
 require "keg"
-require "language/python"
 require "formula"
 require "formulary"
 require "version"
 require "development_tools"
 require "utils/shell"
 require "utils/output"
-require "system_config"
 require "cask/caskroom"
 require "cask/quarantine"
+require "git_repository"
 require "system_command"
 
 module Homebrew
@@ -1046,6 +1045,21 @@ module Homebrew
           The staging path #{user_tilde(path.to_s)} is not writable by the current user.
           To fix, run:
             sudo chown -R #{current_user} #{user_tilde(path.to_s)}
+        EOS
+      end
+
+      sig { returns(T.nilable(String)) }
+      def check_cask_corrupt_dirs
+        corrupt = Cask::Caskroom.corrupt_cask_dirs
+        return if corrupt.empty?
+
+        corrupt_dirs = corrupt.map { |t| "#{Cask::Caskroom.path}/#{t}" }
+
+        <<~EOS
+          Some directories in the Caskroom do not have valid metadata.
+          They may be left over from a manual or incomplete uninstall:
+            #{corrupt_dirs.join("\n  ")}
+          Run `brew cleanup` to remove them.
         EOS
       end
 

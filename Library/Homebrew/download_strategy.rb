@@ -4,7 +4,6 @@
 require "json"
 require "time"
 require "unpack_strategy"
-require "lazy_object"
 require "lock_file"
 require "system_command"
 require "utils/output"
@@ -365,12 +364,6 @@ class AbstractFileDownloadStrategy < AbstractDownloadStrategy # rubocop:todo Sty
   end
 
   private
-
-  sig { returns(String) }
-  def resolved_url
-    resolved_url, = resolved_url_and_basename
-    resolved_url
-  end
 
   sig { returns(String) }
   def resolved_basename
