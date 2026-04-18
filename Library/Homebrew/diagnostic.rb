@@ -4,6 +4,7 @@
 require "keg"
 require "formula"
 require "formulary"
+require "utils"
 require "version"
 require "development_tools"
 require "utils/shell"
@@ -720,10 +721,16 @@ module Homebrew
         end
         return if missing.empty?
 
+        resolvable_missing = missing.filter_map do |d|
+          d.to_installed_formula
+        rescue FormulaUnavailableError
+          nil
+        end
+
         <<~EOS
           Some installed formulae are missing dependencies.
           You should `brew install` the missing dependencies:
-            brew install #{missing.map(&:to_installed_formula).sort_by(&:full_name) * " "}
+            brew install #{resolvable_missing.sort_by(&:full_name) * " "}
 
           Run `brew missing` for more details.
         EOS
@@ -733,8 +740,7 @@ module Homebrew
       def check_deprecated_disabled
         return unless HOMEBREW_CELLAR.exist?
 
-        deprecated_or_disabled = Formula.installed.select(&:deprecated?)
-        deprecated_or_disabled += Formula.installed.select(&:disabled?)
+        deprecated_or_disabled = Formula.installed.select { |f| f.deprecated? || f.disabled? }
         return if deprecated_or_disabled.empty?
 
         <<~EOS
@@ -1053,13 +1059,12 @@ module Homebrew
         corrupt = Cask::Caskroom.corrupt_cask_dirs
         return if corrupt.empty?
 
-        corrupt_dirs = corrupt.map { |t| "#{Cask::Caskroom.path}/#{t}" }
-
         <<~EOS
           Some directories in the Caskroom do not have valid metadata.
-          They may be left over from a manual or incomplete uninstall:
-            #{corrupt_dirs.join("\n  ")}
-          Run `brew cleanup` to remove them.
+            #{corrupt.map { |token| "#{Cask::Caskroom.path}/#{token}" }.join("\n  ")}
+          The following #{Utils.pluralize("cask", corrupt.count)} cannot be upgraded as-is.
+          To fix this, run:
+            #{corrupt.map { |token| "brew reinstall --cask --force #{token}" }.join("\n  ")}
         EOS
       end
 
@@ -1173,7 +1178,7 @@ module Homebrew
         return if shadowed_formula_full_names.empty?
 
         installed_formula_tap_names = Formula.installed.filter_map(&:tap).uniq.reject(&:official?).map(&:name)
-        shadowed_formula_tap_names = shadowed_formula_full_names.map { |s| s.rpartition("/").first }.uniq
+        shadowed_formula_tap_names = shadowed_formula_full_names.filter_map { |s| Utils.tap_from_full_name(s) }.uniq
         unused_shadowed_formula_tap_names = (shadowed_formula_tap_names - installed_formula_tap_names).sort
 
         resolution = if unused_shadowed_formula_tap_names.empty?
@@ -1201,7 +1206,7 @@ module Homebrew
         return if shadowed_cask_full_names.empty?
 
         installed_cask_tap_names = Cask::Caskroom.casks.filter_map(&:tap).uniq.reject(&:official?).map(&:name)
-        shadowed_cask_tap_names = shadowed_cask_full_names.map { |s| s.rpartition("/").first }.uniq
+        shadowed_cask_tap_names = shadowed_cask_full_names.filter_map { |s| Utils.tap_from_full_name(s) }.uniq
         unused_shadowed_cask_tap_names = (shadowed_cask_tap_names - installed_cask_tap_names).sort
 
         resolution = if unused_shadowed_cask_tap_names.empty?

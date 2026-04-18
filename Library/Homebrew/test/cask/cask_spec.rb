@@ -198,6 +198,10 @@ RSpec.describe Cask::Cask, :cask do
       let(:cask_file) { dir/"auto-updates-bundle-check.rb" }
       let(:artifacts) { ['app "MyFancyApp.app"'] }
 
+      before do
+        allow(Homebrew::EnvConfig).to receive(:upgrade_auto_updates_casks?).and_return(true)
+      end
+
       it "is outdated when the installed short version is lower than the tap version" do
         tap_version = "2.61"
         cask = write_auto_updates_cask(cask_file, version: tap_version, artifacts:)
@@ -207,13 +211,13 @@ RSpec.describe Cask::Cask, :cask do
         expect(cask.outdated_version).to eq("2.57")
       end
 
-      it "is outdated when the short version matches and the bundle version is lower than a CSV candidate" do
+      it "is not outdated when the short version matches and the bundle version is lower than a CSV candidate" do
         tap_version = "2.61,3000"
         cask = write_auto_updates_cask(cask_file, version: tap_version, artifacts:)
         allow(cask).to receive(:installed_version).and_return("2.57")
         write_info_plist(cask.config.appdir/"MyFancyApp.app", short_version: "2.61", bundle_version: "2057")
 
-        expect(cask.outdated_version).to eq("2.57")
+        expect(cask.outdated_version).to be_nil
       end
 
       it "is not outdated when the short version matches and the bundle version matches any CSV candidate" do
@@ -239,6 +243,33 @@ RSpec.describe Cask::Cask, :cask do
         cask = write_auto_updates_cask(cask_file, version: tap_version, artifacts:)
         allow(cask).to receive(:installed_version).and_return("2.61")
         write_info_plist(cask.config.appdir/"MyFancyApp.app", short_version: "2.57", bundle_version: "2057")
+
+        expect(cask.outdated_version).to be_nil
+      end
+
+      it "is not outdated when the installed short version directly matches the tap version" do
+        tap_version = "2.61"
+        cask = write_auto_updates_cask(cask_file, version: tap_version, artifacts:)
+        allow(cask).to receive(:installed_version).and_return("2.57")
+        write_info_plist(cask.config.appdir/"MyFancyApp.app", short_version: "2.61", bundle_version: "2057")
+
+        expect(cask.outdated_version).to be_nil
+      end
+
+      it "is not outdated when the installed bundle version directly matches the tap version" do
+        tap_version = "2057"
+        cask = write_auto_updates_cask(cask_file, version: tap_version, artifacts:)
+        allow(cask).to receive(:installed_version).and_return("2.57")
+        write_info_plist(cask.config.appdir/"MyFancyApp.app", short_version: "2.61", bundle_version: "2057")
+
+        expect(cask.outdated_version).to be_nil
+      end
+
+      it "is not outdated when the installed short version matches a CSV build candidate" do
+        tap_version = "2.61,2057"
+        cask = write_auto_updates_cask(cask_file, version: tap_version, artifacts:)
+        allow(cask).to receive(:installed_version).and_return("2.57")
+        write_info_plist(cask.config.appdir/"MyFancyApp.app", short_version: "2057", bundle_version: "3000")
 
         expect(cask.outdated_version).to be_nil
       end
@@ -277,6 +308,24 @@ RSpec.describe Cask::Cask, :cask do
         write_info_plist(cask.config.appdir/"MyFancyApp.app", bundle_version: "2057")
 
         expect(cask.outdated_version).to eq("2.57")
+      end
+
+      it "ignores bad bundle versions when the short version is missing" do
+        tap_version = "2026.406.0"
+        cask = write_auto_updates_cask(cask_file, version: tap_version, artifacts:)
+        allow(cask).to receive(:installed_version).and_return("2025.816.0")
+        write_info_plist(cask.config.appdir/"MyFancyApp.app", bundle_version: "0.0")
+
+        expect(cask.outdated_version).to be_nil
+      end
+
+      it "is not outdated when plist version segment counts differ from the tap version" do
+        tap_version = "1.0"
+        cask = write_auto_updates_cask(cask_file, version: tap_version, artifacts:)
+        allow(cask).to receive(:installed_version).and_return("0.9")
+        write_info_plist(cask.config.appdir/"MyFancyApp.app", short_version: "1", bundle_version: "200")
+
+        expect(cask.outdated_version).to be_nil
       end
     end
 
@@ -532,6 +581,10 @@ RSpec.describe Cask::Cask, :cask do
   end
 
   describe "#supports_linux?" do
+    it "returns false for casks with bare depends_on :macos" do
+      expect(Cask::CaskLoader.load("with-depends-on-macos-bare").supports_linux?).to be false
+    end
+
     it "reflects whether the cask has only platform-agnostic artifacts" do
       expect(Cask::CaskLoader.load("with-non-executable-binary").supports_linux?).to be true
       expect(Cask::CaskLoader.load("basic-cask").supports_linux?).to be false

@@ -683,6 +683,7 @@ _brew_bundle() {
       --go
       --help
       --install
+      --jobs
       --krew
       --mas
       --no-cargo
@@ -1328,6 +1329,23 @@ _brew_generate_cask_ci_matrix() {
 }
 
 _brew_generate_formula_api() {
+  local cur="${COMP_WORDS[COMP_CWORD]}"
+  case "${cur}" in
+    -*)
+      __brewcomp "
+      --debug
+      --dry-run
+      --help
+      --quiet
+      --verbose
+      "
+      return
+      ;;
+    *) ;;
+  esac
+}
+
+_brew_generate_internal_api() {
   local cur="${COMP_WORDS[COMP_CWORD]}"
   case "${cur}" in
     -*)
@@ -3431,6 +3449,7 @@ _brew() {
     generate-cask-api) _brew_generate_cask_api ;;
     generate-cask-ci-matrix) _brew_generate_cask_ci_matrix ;;
     generate-formula-api) _brew_generate_formula_api ;;
+    generate-internal-api) _brew_generate_internal_api ;;
     generate-man-completions) _brew_generate_man_completions ;;
     generate-zap) _brew_generate_zap ;;
     gist-logs) _brew_gist_logs ;;

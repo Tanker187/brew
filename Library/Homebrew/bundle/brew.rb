@@ -3,6 +3,7 @@
 
 require "json"
 require "tsort"
+require "utils"
 require "utils/output"
 require "bundle/package_type"
 
@@ -80,16 +81,16 @@ module Homebrew
         sig { params(formula: String, array: T::Array[String]).returns(T::Boolean) }
         def formula_in_array?(formula, array)
           return true if array.include?(formula)
-          return true if array.include?(formula.split("/").fetch(-1))
+          return true if array.include?(Utils.name_from_full_name(formula))
 
           old_name = formula_oldnames[formula]
-          old_name ||= formula_oldnames[formula.split("/").fetch(-1)]
+          old_name ||= formula_oldnames[Utils.name_from_full_name(formula)]
           return true if old_name && array.include?(old_name)
 
           resolved_full_name = formula_aliases[formula]
           return false unless resolved_full_name
           return true if array.include?(resolved_full_name)
-          return true if array.include?(resolved_full_name.split("/").last)
+          return true if array.include?(Utils.name_from_full_name(resolved_full_name))
 
           false
         end
@@ -123,6 +124,42 @@ module Homebrew
         sig { returns(T::Array[String]) }
         def pinned_formulae
           @pinned_formulae ||= formulae.filter_map { |f| f[:name] if f[:pinned?] }
+        end
+
+        sig { params(name: String).returns(T.nilable(T::Hash[Symbol, T.untyped])) }
+        def find_formula(name)
+          formula = T.cast(formulae_by_full_name(name), T.nilable(T::Hash[Symbol, T.untyped]))
+          formula.presence || formulae_by_name(name)
+        end
+
+        sig { params(name: String).returns(T::Array[String]) }
+        def formula_dep_names(name)
+          find_formula(name)&.fetch(:dependencies, []) || []
+        end
+
+        # Returns recursive dependency names for lock conflict detection.
+        # When pouring bottles, only runtime deps acquire keg locks so build
+        # deps like cmake don't serialize unrelated bottle pours.  When
+        # building from source all deps (including build) must be considered.
+        sig { params(name: String, include_build: T::Boolean).returns(T::Set[String]) }
+        def recursive_dep_names(name, include_build: true)
+          require "formula"
+          f = Formula[name]
+          if include_build
+            f.recursive_dependencies
+          else
+            f.runtime_dependencies
+          end.to_set(&:name)
+        rescue FormulaUnavailableError
+          Set.new
+        end
+
+        sig { params(name: String).returns(T::Boolean) }
+        def formula_bottled?(name)
+          formula = find_formula(name)
+          return false if formula.blank?
+
+          formula.fetch(:bottled, false)
         end
 
         sig { returns(T::Array[T::Hash[Symbol, T.untyped]]) }
@@ -201,9 +238,8 @@ module Homebrew
         def fetchable_name(name, options = {}, no_upgrade: false)
           _ = options
 
-          user, repository, = name.split("/", 3)
-          return if user.present? && repository.present? &&
-                    Homebrew::Bundle::Tap.installed_taps.exclude?("#{user}/#{repository}")
+          return if (tap_name = Utils.tap_from_full_name(name)) &&
+                    Homebrew::Bundle::Tap.installed_taps.exclude?(tap_name)
           return if formula_installed_and_up_to_date?(name, no_upgrade:)
 
           name
@@ -220,8 +256,7 @@ module Homebrew
 
             aliases.each do |a|
               @formula_aliases[a] = f[:full_name]
-              if f[:full_name].include? "/" # tap formula
-                tap_name = f[:full_name].rpartition("/").first
+              if (tap_name = Utils.tap_from_full_name(f[:full_name]))
                 @formula_aliases["#{tap_name}/#{a}"] = f[:full_name]
               end
             end
@@ -240,8 +275,7 @@ module Homebrew
 
             oldnames.each do |oldname|
               @formula_oldnames[oldname] = f[:full_name]
-              if f[:full_name].include? "/" # tap formula
-                tap_name = f[:full_name].rpartition("/").first
+              if (tap_name = Utils.tap_from_full_name(f[:full_name]))
                 @formula_oldnames["#{tap_name}/#{oldname}"] = f[:full_name]
               end
             end
@@ -289,8 +323,7 @@ module Homebrew
             installed_as_dependency = tab.installed_as_dependency
             installed_on_request = tab.installed_on_request
             runtime_dependencies = if (runtime_deps = tab.runtime_dependencies)
-              runtime_deps.filter_map { |d| d["full_name"] }
-
+              T.cast(runtime_deps, T::Array[T::Hash[String, T.untyped]]).filter_map { |d| d["full_name"] }
             end
             poured_from_bottle = tab.poured_from_bottle
           end
@@ -380,7 +413,7 @@ module Homebrew
       def initialize(name = "", options = {})
         super()
         @full_name = name
-        @name = T.let(name.split("/").last || name, String)
+        @name = T.let(Utils.name_from_full_name(name), String)
         @args = T.let(options.fetch(:args, []).map { |arg| "--#{arg}" }, T::Array[String])
         @conflicts_with_arg = T.let(options.fetch(:conflicts_with, []), T::Array[String])
         @restart_service = T.let(options[:restart_service], T.nilable(T.any(Symbol, T::Boolean)))

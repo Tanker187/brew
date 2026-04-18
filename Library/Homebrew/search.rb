@@ -55,10 +55,13 @@ module Homebrew
         # These must define `cask?`, `eval_all?`, and `formula?` methods.
         # Since only one command is typically loaded at a time, this alias is not expected to be available at runtime.
         args:            T.any(Homebrew::Cmd::Desc::Args, Homebrew::Cmd::SearchCmd::Args),
-        search_type:     Descriptions::SearchField,
+        search_type:     T.nilable(Descriptions::SearchField),
       ).void
     }
-    def self.search_descriptions(string_or_regex, args, search_type: Descriptions::SearchField::Description)
+    def self.search_descriptions(string_or_regex, args, search_type: nil)
+      require "descriptions"
+
+      search_type ||= Descriptions::SearchField::Description
       both = !args.formula? && !args.cask?
       eval_all = args.eval_all? || Homebrew::EnvConfig.eval_all?
 
@@ -66,7 +69,7 @@ module Homebrew
         ohai "Formulae"
         if eval_all
           CacheStoreDatabase.use(:descriptions) do |db|
-            cache_store = DescriptionCacheStore.new(db)
+            cache_store = DescriptionCacheStore.new(T.cast(db, CacheStoreDatabase[String, T.anything]))
             Descriptions.search(string_or_regex, search_type, cache_store, eval_all:).print
           end
         else
@@ -90,7 +93,7 @@ module Homebrew
       ohai "Casks"
       if eval_all
         CacheStoreDatabase.use(:cask_descriptions) do |db|
-          cache_store = CaskDescriptionCacheStore.new(db)
+          cache_store = CaskDescriptionCacheStore.new(T.cast(db, CacheStoreDatabase[String, T.anything]))
           Descriptions.search(string_or_regex, search_type, cache_store, eval_all:).print
         end
       else
@@ -182,7 +185,7 @@ module Homebrew
       end
 
       results.sort.filter_map do |name|
-        cask = Cask::CaskLoader.load(name)
+        cask = Cask::CaskLoader.load(name.to_s)
         next if ignore_cask?(cask)
 
         display_name = if cask.installed?
